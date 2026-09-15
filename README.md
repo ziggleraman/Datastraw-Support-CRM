@@ -1,12 +1,19 @@
-# Datastraw Support CRM
+# Support CRM System
 
-A full-stack Customer Support Ticketing CRM System built as part of the Datastraw Technologies hiring assignment.
+A full-stack Customer Support Ticketing CRM built for the Datastraw Technologies hiring assignment.
+
+The system allows support teams to create, search, filter, view, and update customer support tickets from a web interface.
+
+## Live Demo
+
+Frontend: https://datastraw-support-crm-8i0f.onrender.com/
+
+Backend API: https://datastraw-support-crm-api-j4iq.onrender.com
 
 ## Features
 
-- Create customer support tickets
-- Automatically generate unique ticket IDs
-- Store ticket creation and update timestamps
+- Create support tickets
+- Automatic ticket ID and timestamp generation
 - View all support tickets
 - Search tickets by:
   - Ticket ID
@@ -20,9 +27,10 @@ A full-stack Customer Support Ticketing CRM System built as part of the Datastra
   - Closed
 - View complete ticket details
 - Update ticket status
-- Add notes/comments to tickets
-- Dashboard with ticket statistics
-- Responsive and clean user interface
+- Add support notes/comments
+- Persistent cloud database using MongoDB Atlas
+- Responsive web interface
+- Deployed frontend and backend
 
 ## Tech Stack
 
@@ -34,15 +42,15 @@ A full-stack Customer Support Ticketing CRM System built as part of the Datastra
 ### Backend
 - Node.js
 - Express.js
-- SQLite
+- MongoDB
+- MongoDB Node.js Driver
+- dotenv
 - CORS
 
-### Database
-
-SQLite is used with two tables:
-
-- `tickets`
-- `notes`
+### Deployment
+- Frontend: Render Static Site
+- Backend: Render Web Service
+- Database: MongoDB Atlas
 
 ## Project Structure
 
@@ -53,16 +61,15 @@ Datastraw-Support-CRM/
 │   ├── database.js
 │   ├── server.js
 │   ├── package.json
-│   └── ...
+│   └── package-lock.json
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── App.jsx
 │   │   ├── App.css
-│   │   ├── index.css
-│   │   └── main.jsx
+│   │   └── index.css
 │   ├── package.json
-│   └── ...
+│   └── package-lock.json
 │
 ├── .gitignore
 └── README.md
