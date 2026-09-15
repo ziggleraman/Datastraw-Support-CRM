@@ -1,292 +1,225 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
-const db = require("./database");
+const {
+  connectDB,
+  getTicketsCollection,
+  getNotesCollection
+} = require("./database");
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Test route
+const PORT = process.env.PORT || 5000;
+
 app.get("/", (req, res) => {
-    res.json({
-        message: "Datastraw Support CRM Backend is running!"
-    });
+  res.send("Support CRM API is running");
 });
 
-// Create a new ticket
-app.post("/api/tickets", (req, res) => {
+// Create a ticket
+app.post("/api/tickets", async (req, res) => {
+  try {
     const {
-        customer_name,
-        customer_email,
-        subject,
-        description
+      customer_name,
+      customer_email,
+      subject,
+      description
     } = req.body;
 
-    // Check required fields
     if (!customer_name || !customer_email || !subject || !description) {
-        return res.status(400).json({
-            error: "All fields are required."
-        });
+      return res.status(400).json({
+        error: "All fields are required"
+      });
     }
 
-    // Generate ticket ID
-    const ticketId = `TKT-${Date.now()}`;
+    const ticket_id = `TKT-${Date.now()}`;
+    const created_at = new Date();
+    const updated_at = created_at;
 
-    const sql = `
-        INSERT INTO tickets
-        (ticket_id, customer_name, customer_email, subject, description)
-        VALUES (?, ?, ?, ?, ?)
-    `;
+    const ticket = {
+      ticket_id,
+      customer_name,
+      customer_email,
+      subject,
+      description,
+      status: "Open",
+      created_at,
+      updated_at
+    };
 
-    db.run(
-        sql,
-        [
-            ticketId,
-            customer_name,
-            customer_email,
-            subject,
-            description
-        ],
-        function (err) {
-            if (err) {
-                console.error(err.message);
+    await getTicketsCollection().insertOne(ticket);
 
-                return res.status(500).json({
-                    error: "Failed to create ticket."
-                });
-            }
-
-            res.status(201).json({
-                ticket_id: ticketId,
-                created_at: new Date().toISOString()
-            });
-        }
-    );
-});
-
-// Get a single ticket with its notes
-app.get("/api/tickets/:ticket_id", (req, res) => {
-    const ticketId = req.params.ticket_id;
-
-    const ticketSql = `
-        SELECT
-            ticket_id,
-            customer_name,
-            customer_email,
-            subject,
-            description,
-            status,
-            created_at,
-            updated_at
-        FROM tickets
-        WHERE ticket_id = ?
-    `;
-
-    db.get(ticketSql, [ticketId], (err, ticket) => {
-        if (err) {
-            console.error(err.message);
-
-            return res.status(500).json({
-                error: "Failed to retrieve ticket."
-            });
-        }
-
-        if (!ticket) {
-            return res.status(404).json({
-                error: "Ticket not found."
-            });
-        }
-
-        const notesSql = `
-            SELECT
-                id,
-                note_text,
-                created_at
-            FROM notes
-            WHERE ticket_id = ?
-            ORDER BY created_at DESC
-        `;
-
-        db.all(notesSql, [ticketId], (err, notes) => {
-            if (err) {
-                console.error(err.message);
-
-                return res.status(500).json({
-                    error: "Failed to retrieve notes."
-                });
-            }
-
-            res.json({
-                ...ticket,
-                notes: notes
-            });
-        });
+    res.status(201).json({
+      ticket_id,
+      created_at
     });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Failed to create ticket"
+    });
+  }
 });
 
-// Update ticket status and/or add a note
-app.put("/api/tickets/:ticket_id", (req, res) => {
-    const ticketId = req.params.ticket_id;
-    const { status, notes } = req.body;
-
-    const allowedStatuses = ["Open", "In Progress", "Closed"];
-
-    // Validate status if provided
-    if (status && !allowedStatuses.includes(status)) {
-        return res.status(400).json({
-            error: "Invalid status."
-        });
-    }
-
-    // Check that the ticket exists
-    db.get(
-        "SELECT ticket_id FROM tickets WHERE ticket_id = ?",
-        [ticketId],
-        (err, ticket) => {
-            if (err) {
-                console.error(err.message);
-
-                return res.status(500).json({
-                    error: "Database error."
-                });
-            }
-
-            if (!ticket) {
-                return res.status(404).json({
-                    error: "Ticket not found."
-                });
-            }
-
-            const updatedAt = new Date().toISOString();
-
-            // Update status if provided
-            if (status) {
-                db.run(
-                    `UPDATE tickets
-                     SET status = ?, updated_at = ?
-                     WHERE ticket_id = ?`,
-                    [status, updatedAt, ticketId],
-                    (err) => {
-                        if (err) {
-                            console.error(err.message);
-
-                            return res.status(500).json({
-                                error: "Failed to update ticket."
-                            });
-                        }
-
-                        addNote();
-                    }
-                );
-            } else {
-                addNote();
-            }
-
-            // Add note if provided
-            function addNote() {
-                if (notes && notes.trim() !== "") {
-                    db.run(
-                        `INSERT INTO notes (ticket_id, note_text)
-                         VALUES (?, ?)`,
-                        [ticketId, notes.trim()],
-                        (err) => {
-                            if (err) {
-                                console.error(err.message);
-
-                                return res.status(500).json({
-                                    error: "Failed to add note."
-                                });
-                            }
-
-                            finishUpdate();
-                        }
-                    );
-                } else {
-                    finishUpdate();
-                }
-            }
-
-            function finishUpdate() {
-                res.json({
-                    success: true,
-                    updated_at: updatedAt
-                });
-            }
-        }
-    );
-});
-
-    // Get all tickets
-app.get("/api/tickets", (req, res) => {
+// Get tickets
+app.get("/api/tickets", async (req, res) => {
+  try {
     const { status, search } = req.query;
 
-    let sql = `
-        SELECT
-            ticket_id,
-            customer_name,
-            customer_email,
-            subject,
-            status,
-            created_at
-        FROM tickets
-    `;
+    const query = {};
 
-    const conditions = [];
-    const params = [];
-
-    // Filter by status
     if (status) {
-        conditions.push("status = ?");
-        params.push(status);
+      query.status = status;
     }
 
-    // Search across relevant fields
     if (search) {
-        conditions.push(`
-            (
-                ticket_id LIKE ?
-                OR customer_name LIKE ?
-                OR customer_email LIKE ?
-                OR subject LIKE ?
-                OR description LIKE ?
-            )
-        `);
-
-        const searchValue = `%${search}%`;
-
-        params.push(
-            searchValue,
-            searchValue,
-            searchValue,
-            searchValue,
-            searchValue
-        );
+      query.$or = [
+        { ticket_id: { $regex: search, $options: "i" } },
+        { customer_name: { $regex: search, $options: "i" } },
+        { customer_email: { $regex: search, $options: "i" } },
+        { subject: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } }
+      ];
     }
 
-    // Add conditions to SQL
-    if (conditions.length > 0) {
-        sql += " WHERE " + conditions.join(" AND ");
-    }
+    const tickets = await getTicketsCollection()
+      .find(query)
+      .sort({ created_at: -1 })
+      .toArray();
 
-    // Newest tickets first
-    sql += " ORDER BY created_at DESC";
+    const result = tickets.map((ticket) => ({
+      ticket_id: ticket.ticket_id,
+      customer_name: ticket.customer_name,
+      customer_email: ticket.customer_email,
+      subject: ticket.subject,
+      status: ticket.status,
+      created_at: ticket.created_at
+    }));
 
-    db.all(sql, params, (err, rows) => {
-        if (err) {
-            console.error(err.message);
-
-            return res.status(500).json({
-                error: "Failed to retrieve tickets."
-            });
-        }
-
-        res.json(rows);
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Failed to fetch tickets"
     });
+  }
 });
-// Start server
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+
+// Get ticket details
+app.get("/api/tickets/:ticket_id", async (req, res) => {
+  try {
+    const { ticket_id } = req.params;
+
+    const ticket = await getTicketsCollection().findOne({
+      ticket_id
+    });
+
+    if (!ticket) {
+      return res.status(404).json({
+        error: "Ticket not found"
+      });
+    }
+
+    const ticketNotes = await getNotesCollection()
+      .find({ ticket_id })
+      .sort({ created_at: 1 })
+      .toArray();
+
+    res.json({
+      ticket_id: ticket.ticket_id,
+      customer_name: ticket.customer_name,
+      customer_email: ticket.customer_email,
+      subject: ticket.subject,
+      description: ticket.description,
+      status: ticket.status,
+      created_at: ticket.created_at,
+      updated_at: ticket.updated_at,
+      notes: ticketNotes.map((note) => ({
+        note_text: note.note_text,
+        created_at: note.created_at
+      }))
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Failed to fetch ticket"
+    });
+  }
 });
+
+// Update ticket
+app.put("/api/tickets/:ticket_id", async (req, res) => {
+  try {
+    const { ticket_id } = req.params;
+    const { status, notes: noteText } = req.body;
+
+    const allowedStatuses = [
+      "Open",
+      "In Progress",
+      "Closed"
+    ];
+
+    if (status && !allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        error: "Invalid status"
+      });
+    }
+
+    const updated_at = new Date();
+
+    const updateData = {
+      updated_at
+    };
+
+    if (status) {
+      updateData.status = status;
+    }
+
+    const result = await getTicketsCollection().updateOne(
+      { ticket_id },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({
+        error: "Ticket not found"
+      });
+    }
+
+    if (noteText && noteText.trim()) {
+      await getNotesCollection().insertOne({
+        ticket_id,
+        note_text: noteText.trim(),
+        created_at: new Date()
+      });
+    }
+
+    res.json({
+      success: true,
+      updated_at
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Failed to update ticket"
+    });
+  }
+});
+
+async function startServer() {
+  try {
+    await connectDB();
+
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to connect to MongoDB:", error);
+    process.exit(1);
+  }
+}
+
+startServer();

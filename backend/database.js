@@ -1,43 +1,49 @@
-const sqlite3 = require("sqlite3").verbose();
+require("dotenv").config();
 
-const db = new sqlite3.Database("./crm.db", (err) => {
-    if (err) {
-        console.error("Database connection failed:", err.message);
-    } else {
-        console.log("Connected to SQLite database.");
-    }
-});
+const { MongoClient } = require("mongodb");
 
-// Create tables
-db.serialize(() => {
+const uri = process.env.MONGODB_URI;
 
-    // Tickets table
-    db.run(`
-        CREATE TABLE IF NOT EXISTS tickets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ticket_id TEXT UNIQUE NOT NULL,
-            customer_name TEXT NOT NULL,
-            customer_email TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            description TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'Open',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
+if (!uri) {
+  throw new Error("MONGODB_URI environment variable is not set");
+}
 
-    // Notes table
-    db.run(`
-        CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ticket_id TEXT NOT NULL,
-            note_text TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (ticket_id) REFERENCES tickets(ticket_id)
-        )
-    `);
+const client = new MongoClient(uri);
 
-    console.log("Database tables are ready.");
-});
+let db;
+let tickets;
+let notes;
 
-module.exports = db;
+async function connectDB() {
+  await client.connect();
+
+  db = client.db("support_crm");
+  tickets = db.collection("tickets");
+  notes = db.collection("notes");
+
+  await tickets.createIndex({ ticket_id: 1 }, { unique: true });
+
+  console.log("Connected to MongoDB");
+}
+
+function getTicketsCollection() {
+  if (!tickets) {
+    throw new Error("Database is not connected");
+  }
+
+  return tickets;
+}
+
+function getNotesCollection() {
+  if (!notes) {
+    throw new Error("Database is not connected");
+  }
+
+  return notes;
+}
+
+module.exports = {
+  connectDB,
+  getTicketsCollection,
+  getNotesCollection
+};
